@@ -25,6 +25,7 @@ import com.thoughtworks.go.config.Resource;
 import com.thoughtworks.go.database.Database;
 import com.thoughtworks.go.domain.*;
 import com.thoughtworks.go.server.cache.GoCache;
+import com.thoughtworks.go.server.domain.JobStatusListener;
 import com.thoughtworks.go.server.persistence.ArtifactPlanRepository;
 import com.thoughtworks.go.server.persistence.ArtifactPropertiesGeneratorRepository;
 import com.thoughtworks.go.server.persistence.ResourceRepository;
@@ -53,7 +54,7 @@ import static com.thoughtworks.go.util.IBatisUtil.arguments;
 
 @SuppressWarnings("unchecked")
 @Component
-public class JobInstanceSqlMapDao extends SqlMapClientDaoSupport implements JobInstanceDao {
+public class JobInstanceSqlMapDao extends SqlMapClientDaoSupport implements JobInstanceDao, JobStatusListener{
     private static final Logger LOG = Logger.getLogger(JobInstanceSqlMapDao.class);
     private Cache cache;
     private TransactionSynchronizationManager transactionSynchronizationManager;
@@ -469,5 +470,10 @@ public class JobInstanceSqlMapDao extends SqlMapClientDaoSupport implements JobI
         transition.setJobId(jobInstance.getId());
         transition.setStageId(jobInstance.getStageId());
         getSqlMapClientTemplate().insert("insertTransition", transition);
+    }
+
+    @Override
+    public void jobStatusChanged(JobInstance job) {
+        updateStateAndResult(job);
     }
 }
