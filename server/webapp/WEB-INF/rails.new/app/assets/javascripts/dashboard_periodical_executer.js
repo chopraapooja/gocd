@@ -17,7 +17,7 @@
 var DashboardPeriodicalExecuter = Class.create();
 
 DashboardPeriodicalExecuter.prototype = {
-    initialize: function(url, frequency) {
+    initialize: function(url, frequency, stop_condition) {
         this.setUrl(url);
         this.sequenceNumber = 0;
         if (typeof frequency == "undefined") {
@@ -27,7 +27,7 @@ DashboardPeriodicalExecuter.prototype = {
         this.observers = [];
         this.is_execution_start = false;
         this.is_paused = false;
-        this.ignore_duplicate_response = true;
+        this.stop_condition = stop_condition;
     },
     start: function() {
         this.is_execution_start = true;
@@ -60,40 +60,42 @@ DashboardPeriodicalExecuter.prototype = {
         }
         this.onRequest();
     },
-    onRequest: function(){
+    onRequest: function() {
         var executer = this;
         var requestSequenceNumber = this.generateSequenceNumber();
-        this.ongoingRequest = new Ajax.Request(this.url, {
-            method: 'GET',
-            onSuccess: function(transport){
-                executer._loop_observers(transport, requestSequenceNumber);
-            },
-            onException: function(transport, exception){
+        jQuery.ajax({
+            url: this.url,
+            dataType: "json",
+            statusCode: {
+                401: function () {
+                    executer.redirectToLoginPage();
+                },
+                402: function () {
+                    executer.redirectToAboutPage();
+                },
+                404: function () {
+                    executer.showError('Server cannot be reached (404). Either there is a network problem or the server is down.');
+                },
+                500: function (json_array) {
+                    executer.showError('The server encountered an internal problem.', json_array[0]);
+                }
+            }
+        }).success(function(json_array) {
+                executer._loop_observers(json_array, requestSequenceNumber);
+            }).error(function(exception) {
                 executer.showError('Server cannot be reached (exception). Either there is a network problem or the server is down.', exception.toString());
-            },
-            on404: function(){
-                executer.showError('Server cannot be reached (404). Either there is a network problem or the server is down.');
-            },
-            on401: function(){
-                executer.redirectToLoginPage();
-            },
-            on402: function(){
-                executer.redirectToAboutPage();
-            },
-            on500: function(transport){
-                executer.showError('The server encountered an internal problem.', transport.responseText);
-            },
-            onFailure: function(){
+            }).fail(function() {
                 //onFailure means http response a header code (< 200) or (> 300)
                 executer.showError('Server cannot be reached (failure). Either there is a network problem or the server is down.');
-            },
-            onComplete: function(){
-                executer.onRequestComplete.apply(executer);
+            }).done(function() {
+                if(!executer.is_paused) {
+                    executer.onRequestComplete.apply(executer);
+                }
                 //avoid memory leak
                 executer = null;
                 requestSequenceNumber = null;
-            }
-        });
+            });
+
     },
     onRequestComplete: function(){
         //makes sure only 1 timer in this executer
@@ -103,28 +105,11 @@ DashboardPeriodicalExecuter.prototype = {
     showError: function(title, body){
         FlashMessageLauncher.error(title, body);
     },
-    _loop_observers : function(transport, requestSequenceNumber) {
-        if(!transport || !transport.responseText){                                                
-            return;
+    _loop_observers : function(json_array, requestSequenceNumber) {
+        var job_status = json_array[0];
+        if(job_status.error){
+            this.showError('The server encountered a problem.', job_status.error);
         }
-        
-        var jsonText = transport.responseText;
-        //ignore json if there is no changes, you can set ignore_duplicate_response to false when in debug mode 
-        this._json_text_cache = jsonText;
-
-        var json;
-
-        try{
-            json = eval('('+jsonText+')');
-        } catch(e){
-            json = [];
-            this.showError('The server encountered a problem (json error).', e.toString());
-        }
-        
-        if(json.error){
-            this.showError('The server encountered a problem.', json.error);
-        }
-        
         for(var index = 0; index < this.observers.length; index++){
             var observer = this.observers[index];
             
@@ -136,8 +121,9 @@ DashboardPeriodicalExecuter.prototype = {
             }
 
             if(!this.is_paused){
-                observer.notify(json);
+                observer.notify(json_array);
             }
+            this.is_paused = this.stop_condition(json_array);
         }
     },
     is_start : function() {

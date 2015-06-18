@@ -43,7 +43,6 @@ BuildOutputObserver.prototype = {
 
         if (this.is_completed && this.is_output_empty) {
             this.update_page(json);
-            dashboard_periodical_executer.pause();
         }
         else {
             this.update_live_output.bind(this).delay(5);

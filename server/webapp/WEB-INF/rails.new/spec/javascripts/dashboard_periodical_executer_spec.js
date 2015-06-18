@@ -252,6 +252,15 @@ describe("dashboard_periodical_executer", function(){
         assertEquals(2, dashboard_periodical_executer.observers.size());
     });
 
+    it("test_executer_should_pause_when_stop_condition_has_reached", function() {
+        assertEquals(dashboard_periodical_executer.is_paused, false);
+        dashboard_periodical_executer.stop_condition = function() {
+            return true;
+        }
+        dashboard_periodical_executer._loop_observers();
+        assertEquals(dashboard_periodical_executer.is_paused, true);
+    });
+
     it("test_should_invoke_notify_method_on_observer", function(){
         var is_invoked = false;
         var observer = {

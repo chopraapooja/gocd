@@ -22,18 +22,25 @@
     </authorization>
     <pipeline name="up42">
       <materials>
-        <hg url="../manual-testing/ant_hg/dummy" dest="dest_dir" materialName="dummyhg" />
+        <git url="/Users/poojar/testRepos/gitRepo/" dest="dest_dir" materialName="dummygit" />
       </materials>
       <stage name="up42_stage">
         <jobs>
           <job name="up42_job">
             <tasks>
-              <exec command="ls" />
+              <exec command="sleep">
+                <arg>60</arg>
+                <runif status="passed" />
+              </exec>
             </tasks>
           </job>
         </jobs>
       </stage>
     </pipeline>
   </pipelines>
+  <agents>
+    <agent hostname="INpoojar.local" ipaddress="10.4.20.123" uuid="2d8b057e-10dc-4b57-873a-b4a64d3a16b8" />
+    <agent hostname="INpoojar.local" ipaddress="10.4.20.123" uuid="ac1d5b27-c532-4530-97d0-931bdd3cff08" />
+  </agents>
 </cruise>
 
