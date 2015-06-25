@@ -35,16 +35,19 @@ describe("dashboard_periodical_executer", function(){
     });
 
     it("test_should_call_observer_notify_when_success", function(){
-        prepareMockRequest({status: 200}, '[1, 2, 3]');
+        spyOn(jQuery, "ajax").and.callFake(function(options) {
+            options.success([1, 2, 3]);
+        });
+
         var invoked = false;
-        var fakeOb = {notify: function() {
+        var fakeObserver = {notify: function() {
             invoked = true;
         }};
+
         dashboard_periodical_executer.clean();
-        dashboard_periodical_executer.register(fakeOb);
+        dashboard_periodical_executer.register(fakeObserver);
         assertEquals(1, dashboard_periodical_executer.observers.size());
         dashboard_periodical_executer.start();
-        dashboard_periodical_executer.fireNow();
         assertTrue(invoked);
     });
 
@@ -55,7 +58,10 @@ describe("dashboard_periodical_executer", function(){
             invoked = true;
             msg = title;
         }}
-        prepareMockRequest({status: 200}, '{this is a invalid json format}');
+        spyOn(jQuery, "ajax").and.callFake(function(options) {
+            options.error({}, "parsererror");
+        });
+        //prepareMockRequest({status: 200}, '{this is a invalid json format}');
         var fakeOb = {notify: function() {
         }};
         dashboard_periodical_executer.clean();
@@ -96,7 +102,10 @@ describe("dashboard_periodical_executer", function(){
             invoked = true;
             msg = title;
         }}
-        prepareMockRequest({status: 404}, '[1, 2, 3]');
+        spyOn(jQuery, "ajax").and.callFake(function(options) {
+            options.statusCode[404]();
+        });
+        //prepareMockRequest({status: 404}, '[1, 2, 3]');
 
         dashboard_periodical_executer.start();
         dashboard_periodical_executer.fireNow();
@@ -108,7 +117,10 @@ describe("dashboard_periodical_executer", function(){
     it("test_should_call_redirect_to_login_when_response_header_is_401", function(){
         var invoked = false;
         var msg;
-        prepareMockRequest({status: 401}, '[1, 2, 3]');
+        //prepareMockRequest({status: 401}, '[1, 2, 3]');
+        spyOn(jQuery, "ajax").and.callFake(function(options) {
+            options.statusCode[401]();
+        });
 
         dashboard_periodical_executer.redirectToLoginPage = function() {
             invoked = true;
@@ -125,14 +137,15 @@ describe("dashboard_periodical_executer", function(){
 
     it("test_should_show_500_error_and_reason_when_response_header_is_500", function(){
         var invoked = false;
-        var msg1, mesg2;
+        var msg1, msg2;
         window.flash = {error: function(title, body) {
             invoked = true;
             msg1 = title;
             msg2 = body;
         }}
-        prepareMockRequest({status: 500}, 'I\'m the reason');
-
+        spyOn(jQuery, "ajax").and.callFake(function(options) {
+            options.statusCode[500]({responseText: 'I\'m the reason'});
+        });
         dashboard_periodical_executer.start();
         dashboard_periodical_executer.fireNow();
 
@@ -148,7 +161,10 @@ describe("dashboard_periodical_executer", function(){
             invoked = true;
             msg = title;
         }}
-        prepareMockRequest({status: 105}, '');
+        //prepareMockRequest({status: 105}, '');
+        spyOn(jQuery, "ajax").and.callFake(function(options) {
+            options.statusCode[105]();
+        });
 
         dashboard_periodical_executer.start();
         dashboard_periodical_executer.fireNow();
@@ -165,7 +181,11 @@ describe("dashboard_periodical_executer", function(){
             msg1 = title;
             msg2 = body;
         }}
-        prepareMockRequest({status: 200}, '{error: "There is some error."}');
+        //prepareMockRequest({status: 200}, '{error: "There is some error."}');
+
+        spyOn(jQuery, "ajax").and.callFake(function(options) {
+            options.success({error: "There is some error."});
+        });
 
         dashboard_periodical_executer.start();
         dashboard_periodical_executer.fireNow();
@@ -176,7 +196,9 @@ describe("dashboard_periodical_executer", function(){
     });
 
     it("test_should_not_call_observer_when_excuter_is_paused", function(){
-        prepareMockRequest({status: 200}, '[1, 2, 3]');
+        spyOn(jQuery, "ajax").and.callFake(function(options) {
+            options.success([1,2,3.4]);
+        });
         var invoked = false;
         var fakeOb = {notify: function() {
             invoked = true;
@@ -189,6 +211,7 @@ describe("dashboard_periodical_executer", function(){
         dashboard_periodical_executer.fireNow();
 
         assertFalse(invoked);
+
         prepareMockRequest({status: 200}, '[1, 2, 3, 4]');
         dashboard_periodical_executer.resume();
         dashboard_periodical_executer.fireNow();
@@ -252,13 +275,28 @@ describe("dashboard_periodical_executer", function(){
         assertEquals(2, dashboard_periodical_executer.observers.size());
     });
 
-    it("test_executer_should_pause_when_stop_condition_has_reached", function() {
-        assertEquals(dashboard_periodical_executer.is_paused, false);
-        dashboard_periodical_executer.stop_condition = function() {
-            return true;
-        }
-        dashboard_periodical_executer._loop_observers();
+    it("test_executer_should_pause_when_pause_condition_is_true", function() {
+        spyOn(jQuery, "ajax").and.callFake(function(options) {
+            options.success({pause: true});
+        });
+
+        var pausable_dashboard_periodical_executer = new DashboardPeriodicalExecuter('pipelineStatus.json', function(data) {return data.pause;});
+
+        pausable_dashboard_periodical_executer.start();
+        pausable_dashboard_periodical_executer.fireNow();
+
+        var invoked = false;
+        var fakeOb = {notify: function() {
+            invoked = true;
+        }};
+
+        pausable_dashboard_periodical_executer.register(fakeOb);
+
+        pausable_dashboard_periodical_executer.start();
+        pausable_dashboard_periodical_executer.fireNow();
+
         assertEquals(dashboard_periodical_executer.is_paused, true);
+        assertFalse(invoked);
     });
 
     it("test_should_invoke_notify_method_on_observer", function(){
@@ -271,5 +309,12 @@ describe("dashboard_periodical_executer", function(){
         dashboard_periodical_executer.register(observer);
         dashboard_periodical_executer._loop_observers({responseText: "{bla:'bla'}"}, 1);
         assertTrue(is_invoked);
+    });
+
+    it("test_should_clearTimeOut_when_executer_is_paused", function() {
+        spyOn(jQuery, 'ajax').andCallFake(function(options){
+            options.done();
+        });
+        assertNull(dashboard_periodical_executer.timer);
     });
 });
