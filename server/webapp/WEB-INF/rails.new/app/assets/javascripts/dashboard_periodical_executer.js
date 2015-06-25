@@ -27,8 +27,10 @@ DashboardPeriodicalExecuter.prototype = {
         this.pause_condition = stop_condition;
     },
     start: function() {
-        this.is_execution_start = true;
-        this.onRequest();
+        if(!this.is_paused) {
+            this.is_execution_start = true;
+            this.onRequest();
+        }
     },
     stop: function() {
         clearTimeout(this.timer);
@@ -66,6 +68,9 @@ DashboardPeriodicalExecuter.prototype = {
             dataType: "json",
             success: function(json_array) {
                 executer._loop_observers(json_array, requestSequenceNumber);
+                if (executer.pause_condition && executer.pause_condition(json_array)) {
+                    executer.is_paused = true;
+                }
             },
             error: function(jqXHR, textStatus) {
                 if(textStatus == "parsererror"){
@@ -79,10 +84,10 @@ DashboardPeriodicalExecuter.prototype = {
                 //makes sure only 1 timer in this executor
                 clearTimeout(this.timer);
                 delete this.timer;
-                if(this.pause_condition && this.pause_condition()){
-                    this.timer = setTimeout(this.onRequest.bind(executer), this.frequency)
-                }
 
+                if(!executer.is_paused) {
+                    executer.timer = setTimeout(executer.onRequest.bind(executer), this.frequency);
+                }
                 //avoid memory leak
                 executer = null;
                 requestSequenceNumber = null;
@@ -147,6 +152,7 @@ DashboardPeriodicalExecuter.prototype = {
     clean : function() {
         this.observers = [];
         this._json_text_cache = undefined;
+        this.is_paused = false;
     },
     pause : function() {
         this.is_paused = true;
